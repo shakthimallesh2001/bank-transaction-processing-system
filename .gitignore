@@ -1,0 +1,10 @@
+.venv/
+Lib/
+Scripts/
+__pycache__/
+*.pyc
+Log/
+duplicate_reports/
+input_file/
+main_backup.py
+.vscode/
