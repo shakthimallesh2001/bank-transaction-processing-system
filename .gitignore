@@ -8,3 +8,5 @@ duplicate_reports/
 input_file/
 main_backup.py
 .vscode/
+.pytest_cache/
+.coverage
