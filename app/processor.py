@@ -7,7 +7,10 @@ import pandas as pd
 from app.validator import validate_transaction_file
 
 
-# 1. Configure loggers
+# ==========================================
+# 1. CONFIGURE LOGGERS
+# ==========================================
+
 def setup_loggers(log_folder="Log"):
 
     os.makedirs(os.path.join(log_folder, "bank"), exist_ok=True)
@@ -27,9 +30,7 @@ def setup_loggers(log_folder="Log"):
             encoding="utf-8"
         )
         bank_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s"
-            )
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         )
         bank_logger.addHandler(bank_handler)
 
@@ -39,17 +40,21 @@ def setup_loggers(log_folder="Log"):
             encoding="utf-8"
         )
         credit_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s"
-            )
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         )
         credit_logger.addHandler(credit_handler)
 
     return bank_logger, credit_logger
 
 
-# 2. Read transaction files
+# ==========================================
+# 2. READ TRANSACTION FILE
+# ==========================================
+
+
 def read_transaction_file(file_path):
+
+    file_path = os.fspath(file_path)
 
     if file_path.lower().endswith(".csv"):
         return pd.read_csv(file_path)
@@ -61,7 +66,11 @@ def read_transaction_file(file_path):
         raise ValueError("Unsupported file format")
 
 
-# 3. Process an individual file
+
+# ==========================================
+# 3. PROCESS INDIVIDUAL FILE
+# ==========================================
+
 def process_file(file_path, output_folder, logger):
 
     file_name = os.path.basename(file_path)
@@ -72,6 +81,8 @@ def process_file(file_path, output_folder, logger):
     print("File Name:", file_name)
 
     try:
+
+        # Extract four-digit number from filename
         match = re.search(r"\d{4}", file_name)
 
         if not match:
@@ -79,14 +90,18 @@ def process_file(file_path, output_folder, logger):
             return
 
         number = match.group()
+
         print("Extracted Number:", number)
 
+        # Read CSV or Excel file
         df = read_transaction_file(file_path)
 
+        # Validate required columns
         validate_transaction_file(df)
 
         print("File validation successful")
 
+        # Detect duplicate transactions
         duplicates = df[
             df.duplicated(
                 subset=["Transaction ID"],
@@ -99,6 +114,7 @@ def process_file(file_path, output_folder, logger):
             print("\nDuplicate Transactions Found:")
             print(duplicates)
 
+            # Save duplicate report
             report_name = (
                 os.path.splitext(file_name)[0] + "-duplicates.csv"
             )
@@ -117,8 +133,10 @@ def process_file(file_path, output_folder, logger):
             )
 
         else:
+
             print("No Duplicate Transactions Found")
 
+        # Display transaction data
         print("\nFile Data:")
         print(df)
 
@@ -135,7 +153,10 @@ def process_file(file_path, output_folder, logger):
         )
 
 
-# 4. Process all transaction files
+# ==========================================
+# 4. PROCESS ALL TRANSACTION FILES
+# ==========================================
+
 def process_all_files(
     input_folder="input_file",
     output_folder="duplicate_reports",
