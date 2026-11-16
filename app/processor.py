@@ -199,3 +199,81 @@ def process_all_files(
     print("All files processed!")
     print("Duplicate reports folder:", output_folder)
     print("==========================================")
+
+# ==========================================
+# 5. PROCESS UPLOADED TRANSACTION DATA
+# ==========================================
+
+def process_uploaded_dataframe(
+    df,
+    file_name,
+    output_folder="duplicate_reports",
+    log_folder="Log"
+):
+    # Create output folder
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Configure loggers
+    bank_logger, credit_logger = setup_loggers(log_folder)
+
+    # Select logger based on uploaded file name
+    if "credit" in file_name.lower():
+        logger = credit_logger
+    else:
+        logger = bank_logger
+
+    logger.info(f"Processing uploaded file: {file_name}")
+
+    # Validate transaction columns
+    validate_transaction_file(df)
+
+    # Detect duplicate transactions
+    duplicates = df[
+        df.duplicated(
+            subset=["Transaction ID"],
+            keep=False
+        )
+    ]
+
+    report_path = None
+
+    # Generate duplicate report
+    if not duplicates.empty:
+
+        report_name = (
+            os.path.splitext(file_name)[0] + "-duplicates.csv"
+        )
+
+        report_path = os.path.join(
+            output_folder,
+            report_name
+        )
+
+        duplicates.to_csv(report_path, index=False)
+
+        logger.warning(
+            f"Duplicate transactions found in {file_name}"
+        )
+
+    else:
+        logger.info(
+            f"No duplicate transactions found in {file_name}"
+        )
+
+    # Log successful processing
+    logger.info(
+        f"Successfully processed uploaded file: {file_name}"
+    )
+
+    # Return processing summary
+    return {
+        "total_transactions": len(df),
+        "duplicate_transactions": len(duplicates),
+        "unique_transaction_ids": int(
+            df["Transaction ID"].nunique()
+        ),
+        "non_duplicate_transactions": (
+            len(df) - len(duplicates)
+        ),
+        "duplicate_report": report_path
+    }

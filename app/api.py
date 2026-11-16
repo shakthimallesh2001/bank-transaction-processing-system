@@ -1,10 +1,11 @@
 
+import os
 from io import BytesIO
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
-from app.validator import validate_transaction_file
+from app.processor import process_uploaded_dataframe
 
 
 app = FastAPI(
@@ -39,7 +40,8 @@ async def upload_transaction_file(file: UploadFile = File(...)):
             detail="No file selected."
         )
 
-    file_name = file.filename.lower()
+    file_name = os.path.basename(file.filename)
+    file_extension = file_name.lower()
 
     try:
         contents = await file.read()
@@ -52,10 +54,10 @@ async def upload_transaction_file(file: UploadFile = File(...)):
 
         file_data = BytesIO(contents)
 
-        if file_name.endswith(".csv"):
+        if file_extension.endswith(".csv"):
             df = pd.read_csv(file_data)
 
-        elif file_name.endswith((".xlsx", ".xls")):
+        elif file_extension.endswith((".xlsx", ".xls")):
             df = pd.read_excel(file_data)
 
         else:
@@ -64,35 +66,17 @@ async def upload_transaction_file(file: UploadFile = File(...)):
                 detail="Only CSV and Excel files are supported."
             )
 
-        # Validate transaction columns
-        validate_transaction_file(df)
-
-        # Detect duplicate transactions
-        duplicates = df[
-            df.duplicated(
-                subset=["Transaction ID"],
-                keep=False
-            )
-        ]
-
-        # Calculate transaction statistics
-        total_transactions = len(df)
-        duplicate_transactions = len(duplicates)
-        unique_transaction_ids = int(
-            df["Transaction ID"].nunique()
-        )
-        non_duplicate_transactions = (
-            total_transactions - duplicate_transactions
+        # Process uploaded data using existing processor
+        result = process_uploaded_dataframe(
+            df=df,
+            file_name=file_name
         )
 
         return {
             "status": "success",
             "message": "File uploaded and processed successfully.",
-            "file_name": file.filename,
-            "total_transactions": total_transactions,
-            "duplicate_transactions": duplicate_transactions,
-            "unique_transaction_ids": unique_transaction_ids,
-            "non_duplicate_transactions": non_duplicate_transactions
+            "file_name": file_name,
+            **result
         }
 
     except HTTPException:
