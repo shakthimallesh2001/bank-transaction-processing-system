@@ -4,12 +4,21 @@ from io import BytesIO
 from decimal import Decimal
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
+
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+    Depends
+)
+
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.processor import process_uploaded_dataframe
 from app.database import get_db
-from app.models import Transaction
+from app.models import Transaction, ProcessingHistory
 
 
 app = FastAPI(
@@ -19,6 +28,20 @@ app = FastAPI(
 )
 
 
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Home endpoint
 @app.get("/")
 def home():
     return {
@@ -27,6 +50,7 @@ def home():
     }
 
 
+# Health check endpoint
 @app.get("/health")
 def health_check():
     return {
@@ -35,6 +59,56 @@ def health_check():
     }
 
 
+# Get all transactions
+@app.get("/transactions")
+def get_transactions(db: Session = Depends(get_db)):
+
+    transactions = (
+        db.query(Transaction)
+        .order_by(Transaction.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": transaction.id,
+            "transaction_id": transaction.transaction_id,
+            "transaction_date": transaction.transaction_date,
+            "description": transaction.description,
+            "amount": transaction.amount,
+            "account_reference": transaction.account_reference,
+            "source_file": transaction.source_file,
+            "is_duplicate": transaction.is_duplicate
+        }
+        for transaction in transactions
+    ]
+
+
+# Get processing history
+@app.get("/processing-history")
+def get_processing_history(db: Session = Depends(get_db)):
+
+    history_records = (
+        db.query(ProcessingHistory)
+        .order_by(ProcessingHistory.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": record.id,
+            "file_name": record.file_name,
+            "uploaded_at": record.uploaded_at,
+            "total_transactions": record.total_transactions,
+            "duplicate_transactions": record.duplicate_transactions,
+            "status": record.status,
+            "message": record.message
+        }
+        for record in history_records
+    ]
+
+
+# Upload and process transaction file
 @app.post("/upload")
 async def upload_transaction_file(
     file: UploadFile = File(...),
@@ -48,9 +122,9 @@ async def upload_transaction_file(
         )
 
     file_name = os.path.basename(file.filename)
-    file_extension = file_name.lower()
 
     try:
+
         contents = await file.read()
 
         if not contents:
@@ -61,10 +135,11 @@ async def upload_transaction_file(
 
         file_data = BytesIO(contents)
 
-        if file_extension.endswith(".csv"):
+        # Read CSV or Excel file
+        if file_name.lower().endswith(".csv"):
             df = pd.read_csv(file_data)
 
-        elif file_extension.endswith((".xlsx", ".xls")):
+        elif file_name.lower().endswith((".xlsx", ".xls")):
             df = pd.read_excel(file_data)
 
         else:
@@ -73,7 +148,7 @@ async def upload_transaction_file(
                 detail="Only CSV and Excel files are supported."
             )
 
-        # Process uploaded data using existing processor
+        # Process uploaded data
         result = process_uploaded_dataframe(
             df=df,
             file_name=file_name
@@ -91,30 +166,54 @@ async def upload_transaction_file(
         for index, row in df.iterrows():
 
             if row[
-                ["Transaction ID", "Transaction Date",
-                 "Description", "Amount", "Account Reference"]
+                [
+                    "Transaction ID",
+                    "Transaction Date",
+                    "Description",
+                    "Amount",
+                    "Account Reference"
+                ]
             ].isna().any():
+
                 raise ValueError(
                     "Transaction file contains missing required values."
                 )
 
             transaction = Transaction(
                 transaction_id=str(row["Transaction ID"]),
+
                 transaction_date=pd.to_datetime(
                     row["Transaction Date"],
                     dayfirst=True
                 ).date(),
+
                 description=str(row["Description"]),
+
                 amount=Decimal(str(row["Amount"])),
+
                 account_reference=str(row["Account Reference"]),
+
                 source_file=file_name,
+
                 is_duplicate=bool(duplicate_mask.iloc[index])
             )
 
             transactions.append(transaction)
 
-        # Save transactions to PostgreSQL
+        # Save transactions
         db.add_all(transactions)
+
+        # Save successful processing history
+        history = ProcessingHistory(
+            file_name=file_name,
+            total_transactions=result["total_transactions"],
+            duplicate_transactions=result["duplicate_transactions"],
+            status="Success",
+            message="File processed and saved successfully."
+        )
+
+        db.add(history)
+
         db.commit()
 
         return {
@@ -125,12 +224,46 @@ async def upload_transaction_file(
             **result
         }
 
-    except HTTPException:
+    except HTTPException as error:
+
         db.rollback()
+
+        # Record failed upload
+        try:
+
+            history = ProcessingHistory(
+                file_name=file_name,
+                status="Failed",
+                message=str(error.detail)
+            )
+
+            db.add(history)
+            db.commit()
+
+        except Exception:
+            db.rollback()
+
         raise
 
     except Exception as error:
+
         db.rollback()
+
+        # Record failed upload
+        try:
+
+            history = ProcessingHistory(
+                file_name=file_name,
+                status="Failed",
+                message=str(error)
+            )
+
+            db.add(history)
+            db.commit()
+
+        except Exception:
+            db.rollback()
+
         raise HTTPException(
             status_code=400,
             detail=f"Unable to process file: {str(error)}"
