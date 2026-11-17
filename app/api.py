@@ -1,4 +1,5 @@
-
+from pathlib import Path
+from fastapi.responses import FileResponse
 import os
 from io import BytesIO
 from decimal import Decimal
@@ -26,7 +27,11 @@ app = FastAPI(
     description="API for validating and processing bank transaction files.",
     version="1.0.0"
 )
-
+FRONTEND_FILE = (
+    Path(__file__).resolve().parent.parent
+    / "frontend"
+    / "index.html"
+)
 
 # CORS configuration
 app.add_middleware(
@@ -41,14 +46,10 @@ app.add_middleware(
 )
 
 
-# Home endpoint
-@app.get("/")
+# Serve frontend dashboard
+@app.get("/", response_class=FileResponse)
 def home():
-    return {
-        "message": "Welcome to Bank Transaction Processing System API",
-        "status": "Running"
-    }
-
+    return FileResponse(FRONTEND_FILE)
 
 # Health check endpoint
 @app.get("/health")
