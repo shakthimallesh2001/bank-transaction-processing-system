@@ -1,3 +1,4 @@
+
 # 🏦 Bank Transaction Processing System
 
 A Python-based Bank Transaction Processing System that validates, processes, and manages bank transaction files using **FastAPI, PostgreSQL, Pandas, and a web-based dashboard**.
@@ -17,6 +18,16 @@ The application supports CSV and Excel uploads, transaction validation, duplicat
 - **Processing History:** Track successful and failed file uploads.
 - **Logging:** Maintain separate bank and credit transaction logs.
 - **Automated Testing:** Verify application functionality using pytest.
+
+## 📸 Application Screenshots
+
+### Dashboard
+
+![Bank Transaction Processing Dashboard](screenshots/dashboard.png)
+
+### Processing History
+
+![Transaction Processing History](screenshots/processing-history.png)
 
 ## 🛠️ Technologies Used
 
@@ -53,6 +64,10 @@ bank-transaction-processing-system/
 │   ├── test_processor.py
 │   └── test_validator.py
 │
+├── screenshots/
+│   ├── dashboard.png
+│   └── processing-history.png
+│
 ├── input_file/
 ├── duplicate_reports/
 ├── Log/
@@ -60,8 +75,7 @@ bank-transaction-processing-system/
 ├── main.py
 ├── pytest.ini
 ├── requirements.txt
-├── .gitignore
-└── README.md
+└── .gitignore
 ```
 
 ## ⚙️ Installation and Setup
@@ -100,9 +114,10 @@ python -m pip install -r requirements.txt
 
 This project uses PostgreSQL.
 
-1. Install PostgreSQL and create a database named `bank_transactions`.
-2. Create a `.env` file in the project root directory.
-3. Configure your database connection:
+1. Install PostgreSQL.
+2. Create a database named `bank_transactions`.
+3. Create a `.env` file in the project root directory.
+4. Configure your database connection:
 
 ```env
 DB_HOST=localhost
@@ -136,7 +151,7 @@ http://127.0.0.1:8000/docs
 
 ### Start the frontend dashboard
 
-Open another terminal, activate the virtual environment, and run:
+Open another terminal and run:
 
 ```bash
 python -m http.server 5500
@@ -186,7 +201,7 @@ The automated tests cover:
 - Processing history
 - Transaction processing
 
-## 📊 Application Modules
+## 🏗️ Application Architecture
 
 The application consists of three main layers:
 
