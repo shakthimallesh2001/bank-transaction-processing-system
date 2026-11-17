@@ -10,3 +10,4 @@ main_backup.py
 .vscode/
 .pytest_cache/
 .coverage
+.env

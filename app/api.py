@@ -1,11 +1,15 @@
 
 import os
 from io import BytesIO
+from decimal import Decimal
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
+from sqlalchemy.orm import Session
 
 from app.processor import process_uploaded_dataframe
+from app.database import get_db
+from app.models import Transaction
 
 
 app = FastAPI(
@@ -32,7 +36,10 @@ def health_check():
 
 
 @app.post("/upload")
-async def upload_transaction_file(file: UploadFile = File(...)):
+async def upload_transaction_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
 
     if not file.filename:
         raise HTTPException(
@@ -72,23 +79,58 @@ async def upload_transaction_file(file: UploadFile = File(...)):
             file_name=file_name
         )
 
+        # Identify duplicate transactions
+        duplicate_mask = df.duplicated(
+            subset=["Transaction ID"],
+            keep=False
+        )
+
+        # Prepare transactions for PostgreSQL
+        transactions = []
+
+        for index, row in df.iterrows():
+
+            if row[
+                ["Transaction ID", "Transaction Date",
+                 "Description", "Amount", "Account Reference"]
+            ].isna().any():
+                raise ValueError(
+                    "Transaction file contains missing required values."
+                )
+
+            transaction = Transaction(
+                transaction_id=str(row["Transaction ID"]),
+                transaction_date=pd.to_datetime(
+                    row["Transaction Date"],
+                    dayfirst=True
+                ).date(),
+                description=str(row["Description"]),
+                amount=Decimal(str(row["Amount"])),
+                account_reference=str(row["Account Reference"]),
+                source_file=file_name,
+                is_duplicate=bool(duplicate_mask.iloc[index])
+            )
+
+            transactions.append(transaction)
+
+        # Save transactions to PostgreSQL
+        db.add_all(transactions)
+        db.commit()
+
         return {
             "status": "success",
-            "message": "File uploaded and processed successfully.",
+            "message": "File uploaded, processed and saved to database successfully.",
             "file_name": file_name,
+            "stored_transactions": len(transactions),
             **result
         }
 
     except HTTPException:
+        db.rollback()
         raise
 
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error)
-        )
-
     except Exception as error:
+        db.rollback()
         raise HTTPException(
             status_code=400,
             detail=f"Unable to process file: {str(error)}"
